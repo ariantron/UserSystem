@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"sync"
+	"time"
 )
 
 func generateUsers(numUsers int) []models.User {
@@ -64,42 +65,59 @@ func saveToJSON(data []models.User, fileName string) error {
 	return nil
 }
 
-func readFromJson(fileName string) ([]models.User, error) {
+func readFromJsonStream(fileName string) ([]models.User, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
 	var users []models.User
-	jsonData, _ := os.ReadFile(fileName)
-	err := json.Unmarshal(jsonData, &users)
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&users)
 	if err != nil {
 		return nil, err
 	}
 	return users, nil
 }
 
-func worker(db *gorm.DB, userChan <-chan models.User, wg *sync.WaitGroup, semaphore chan struct{}) {
-	for user := range userChan {
-		if err := db.Create(&user).Error; err != nil {
-			fmt.Printf("Error inserting user %s: %v\n", user.Name, err)
+func worker(db *gorm.DB, userChan <-chan []models.User, wg *sync.WaitGroup, semaphore chan struct{}) {
+	for userBatch := range userChan {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&userBatch).Error; err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			log.Printf("Error inserting batch: %v\n", err)
 		}
 		<-semaphore
 		wg.Done()
 	}
 }
 
-func setupDatabaseWorkers(db *gorm.DB, users []models.User, maxWorkers int) {
-	usersChannel := make(chan models.User, len(users))
+func setupDatabaseWorkers(db *gorm.DB, users []models.User, maxWorkers int, batchSize int) {
+	userBatchChannel := make(chan []models.User, len(users)/batchSize+1)
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, maxWorkers)
 
 	for i := 0; i < maxWorkers; i++ {
-		go worker(db, usersChannel, &wg, semaphore)
+		go worker(db, userBatchChannel, &wg, semaphore)
 	}
 
-	for _, user := range users {
+	for i := 0; i < len(users); i += batchSize {
+		end := i + batchSize
+		if end > len(users) {
+			end = len(users)
+		}
+
 		semaphore <- struct{}{}
 		wg.Add(1)
-		usersChannel <- user
+		userBatchChannel <- users[i:end]
 	}
 
-	close(usersChannel)
+	close(userBatchChannel)
 	wg.Wait()
 }
 
@@ -112,27 +130,31 @@ func generateAndSaveUserData(numUsers int, fileName string) error {
 		return fmt.Errorf("error saving data: %w", err)
 	}
 
-	fmt.Println("Data generation and saving completed.")
+	fmt.Println("Data generation and saving completed....")
 	return nil
 }
 
-func processUserData(fileName string, db *gorm.DB, maxWorkers int) error {
-	users, err := readFromJson(fileName)
+func processUserData(fileName string, db *gorm.DB, maxWorkers int, batchSize int) error {
+	users, err := readFromJsonStream(fileName)
 	if err != nil {
 		return fmt.Errorf("error reading data from json: %v", err)
 	}
 
 	fmt.Printf("Total users to process: %d\n", len(users))
-	setupDatabaseWorkers(db, users, maxWorkers)
 
-	fmt.Println("All users processed successfully.")
+	startTime := time.Now()
+	setupDatabaseWorkers(db, users, maxWorkers, batchSize)
+	duration := time.Since(startTime)
+
+	fmt.Printf("Processed %d users in %v\n", len(users), duration)
 	return nil
 }
 
 func main() {
-	const numUsers = 1_000_000
+	const numUsers = 1_000
 	const fileName = "users_data.json"
-	const maxWorkers = 10
+	const maxWorkers = 20
+	const batchSize = 100
 
 	if err := generateAndSaveUserData(numUsers, fileName); err != nil {
 		log.Fatal(err)
@@ -141,7 +163,7 @@ func main() {
 	db := database.ConnectDB()
 	database.Migrate(db)
 
-	if err := processUserData(fileName, db, maxWorkers); err != nil {
+	if err := processUserData(fileName, db, maxWorkers, batchSize); err != nil {
 		log.Fatal(err)
 	}
 
