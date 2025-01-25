@@ -1,11 +1,12 @@
 package handlers
 
 import (
-	"UserSystem/models"
-	"UserSystem/services"
+	"UserSystem/internal/models"
+	"UserSystem/internal/services"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"net/http"
+	"strconv"
 )
 
 type UserHandler struct {
@@ -30,7 +31,16 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 }
 
 func (h *UserHandler) GetUsers(c echo.Context) error {
-	users, err := h.service.GetAllUsers()
+	page, err := strconv.Atoi(c.QueryParam("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit < 1 {
+		limit = 10
+	}
+
+	users, err := h.service.GetAllUsers(page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}

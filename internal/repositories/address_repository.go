@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"UserSystem/models"
+	"UserSystem/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

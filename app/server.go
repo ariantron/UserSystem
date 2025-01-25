@@ -1,8 +1,10 @@
 package main
 
 import (
-	"UserSystem/handlers"
-	"fmt"
+	"UserSystem/configs"
+	"UserSystem/internal/handlers"
+	"UserSystem/internal/repositories"
+	"UserSystem/internal/services"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
@@ -10,15 +12,18 @@ import (
 func Serve(db *gorm.DB) {
 	e := echo.New()
 	Router(e, db)
-	err := e.Start(":8080")
-	if err != nil {
-		fmt.Println("Application Serve has encountered error:\r\n" + err.Error())
-	}
+	e.Logger.Fatal(e.Start(":" + configs.AppPort))
 }
 
 func Router(e *echo.Echo, db *gorm.DB) {
-	userHandler := handlers.NewUserHandler(db)
-	addressHandler := handlers.NewAddressHandler(db)
+	userRepo := repositories.NewUserRepository(db)
+	addressRepo := repositories.NewAddressRepository(db)
+
+	userService := services.NewUserService(userRepo)
+	addressService := services.NewAddressService(addressRepo)
+
+	userHandler := handlers.NewUserHandler(userService)
+	addressHandler := handlers.NewAddressHandler(addressService)
 
 	e.POST("/users", userHandler.CreateUser)
 	e.GET("/users", userHandler.GetUsers)
@@ -26,7 +31,6 @@ func Router(e *echo.Echo, db *gorm.DB) {
 	e.PUT("/users/:id", userHandler.UpdateUser)
 	e.DELETE("/users/:id", userHandler.DeleteUser)
 
-	// Address routes
 	e.POST("/addresses", addressHandler.CreateAddress)
 	e.GET("/users/:userID/addresses", addressHandler.GetAddressesByUser)
 	e.PUT("/addresses/:id", addressHandler.UpdateAddress)

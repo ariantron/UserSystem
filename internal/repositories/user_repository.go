@@ -1,14 +1,14 @@
 package repositories
 
 import (
-	"UserSystem/models"
+	"UserSystem/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type UserRepository interface {
 	Create(user *models.User) error
-	FindAll() ([]models.User, error)
+	FindAll(page, limit int) ([]models.User, error)
 	FindByID(id uuid.UUID) (models.User, error)
 	Update(user *models.User) error
 	Delete(id uuid.UUID) error
@@ -26,9 +26,13 @@ func (r *userRepository) Create(user *models.User) error {
 	return r.DB.Create(user).Error
 }
 
-func (r *userRepository) FindAll() ([]models.User, error) {
+func (r *userRepository) FindAll(page, limit int) ([]models.User, error) {
 	var users []models.User
-	err := r.DB.Preload("Addresses").Find(&users).Error
+	offset := (page - 1) * limit
+	err := r.DB.Preload("Addresses").
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error
 	return users, err
 }
 

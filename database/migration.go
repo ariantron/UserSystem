@@ -1,7 +1,7 @@
 package database
 
 import (
-	"UserSystem/models"
+	"UserSystem/internal/models"
 	"fmt"
 	"gorm.io/gorm"
 	"log"

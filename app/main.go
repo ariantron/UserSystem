@@ -2,7 +2,7 @@ package main
 
 import (
 	"UserSystem/database"
-	"UserSystem/models"
+	"UserSystem/internal/models"
 	"encoding/json"
 	"fmt"
 	"github.com/brianvoe/gofakeit/v6"
@@ -84,32 +84,8 @@ func worker(db *gorm.DB, userChan <-chan models.User, wg *sync.WaitGroup, semaph
 	}
 }
 
-func main() {
-	const numUsers = 1_000_000
-	const fileName = "users_data.json"
-	const maxWorkers = 10
-
-	fmt.Printf("Generating %d users with multiple addresses...\n", numUsers)
-	usersData := generateUsers(numUsers)
-	fmt.Printf("Saving data to %s...\n", fileName)
-	err := saveToJSON(usersData, fileName)
-	if err != nil {
-		fmt.Printf("Error saving data: %v\n", err)
-		return
-	}
-	fmt.Println("Data generation and saving completed.")
-
-	db := database.ConnectDB()
-	database.Migrate(db)
-
-	users, err := readFromJson(fileName)
-	if err != nil {
-		fmt.Printf("Error reading data from json: %v\n", err)
-		return
-	}
-	fmt.Printf("Total users to process: %d\n", len(users))
-
-	usersChannel := make(chan models.User, numUsers)
+func setupDatabaseWorkers(db *gorm.DB, users []models.User, maxWorkers int) {
+	usersChannel := make(chan models.User, len(users))
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, maxWorkers)
 
@@ -125,7 +101,49 @@ func main() {
 
 	close(usersChannel)
 	wg.Wait()
+}
+
+func generateAndSaveUserData(numUsers int, fileName string) error {
+	fmt.Printf("Generating %d users with multiple addresses...\n", numUsers)
+	usersData := generateUsers(numUsers)
+
+	fmt.Printf("Saving data to %s...\n", fileName)
+	if err := saveToJSON(usersData, fileName); err != nil {
+		return fmt.Errorf("error saving data: %w", err)
+	}
+
+	fmt.Println("Data generation and saving completed.")
+	return nil
+}
+
+func processUserData(fileName string, db *gorm.DB, maxWorkers int) error {
+	users, err := readFromJson(fileName)
+	if err != nil {
+		return fmt.Errorf("error reading data from json: %v", err)
+	}
+
+	fmt.Printf("Total users to process: %d\n", len(users))
+	setupDatabaseWorkers(db, users, maxWorkers)
+
 	fmt.Println("All users processed successfully.")
+	return nil
+}
+
+func main() {
+	const numUsers = 1_000_000
+	const fileName = "users_data.json"
+	const maxWorkers = 10
+
+	if err := generateAndSaveUserData(numUsers, fileName); err != nil {
+		log.Fatal(err)
+	}
+
+	db := database.ConnectDB()
+	database.Migrate(db)
+
+	if err := processUserData(fileName, db, maxWorkers); err != nil {
+		log.Fatal(err)
+	}
 
 	Serve(db)
 }

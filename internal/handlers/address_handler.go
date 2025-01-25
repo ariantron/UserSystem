@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"UserSystem/models"
-	"UserSystem/services"
+	"UserSystem/internal/models"
+	"UserSystem/internal/services"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"net/http"

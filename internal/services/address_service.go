@@ -1,8 +1,8 @@
 package services
 
 import (
-	"UserSystem/models"
-	"UserSystem/repositories"
+	"UserSystem/internal/models"
+	"UserSystem/internal/repositories"
 	"github.com/google/uuid"
 )
 

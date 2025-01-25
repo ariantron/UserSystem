@@ -1,14 +1,14 @@
 package services
 
 import (
-	"UserSystem/models"
-	"UserSystem/repositories"
+	"UserSystem/internal/models"
+	"UserSystem/internal/repositories"
 	"github.com/google/uuid"
 )
 
 type UserService interface {
 	CreateUser(user *models.User) error
-	GetAllUsers() ([]models.User, error)
+	GetAllUsers(page, limit int) ([]models.User, error)
 	GetUserByID(id uuid.UUID) (models.User, error)
 	UpdateUser(user *models.User) error
 	DeleteUser(id uuid.UUID) error
@@ -26,8 +26,8 @@ func (s *userService) CreateUser(user *models.User) error {
 	return s.repo.Create(user)
 }
 
-func (s *userService) GetAllUsers() ([]models.User, error) {
-	return s.repo.FindAll()
+func (s *userService) GetAllUsers(page, limit int) ([]models.User, error) {
+	return s.repo.FindAll(page, limit)
 }
 
 func (s *userService) GetUserByID(id uuid.UUID) (models.User, error) {
